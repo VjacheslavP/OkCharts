@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="css/style.css"/>
+    <script src="js/jquery-2.1.1.min.js"></script>
+    <script src="js/map.js"></script>
+    <title>Map</title>
+</head>
+<body>
+    <div id="map_container" class="loading">
+        <canvas id="map"></canvas>
+        <canvas id="map_hover"></canvas>
+    </div>
+    <div style="clear: both;"></div>
+    <div id="russia_container" class="loading">
+        <canvas id="russia"></canvas>
+        <canvas id="russia_hover"></canvas>
+    </div>
+    <script>
+        var map = new Map({
+            max_zoom: 4,
+            world_filename: "ne_50m_admin_0_countries.json",
+            russia_filename: "RUS_adm1.json",
+            example_filename: "example_data.json"
+        });
+
+        var russia = new Map({
+           world_filename: "RUS_adm1.json",
+            canvas_id: "russia",
+            canvas_hover_id: "russia_hover",
+            container_id: "russia_container",
+            russia_filename: "",
+            example_filename: ""
+        });
+    </script>
+</body>
+</html>
