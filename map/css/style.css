@@ -1,28 +1,3 @@
-#map {
-    /*width: 100%;*/
-    /*position: absolute;*/
-    /*left: 0;*/
-    /*top: 0;*/
-}
-
-#map_container {
-    /*position: relative;*/
-    /*width: 100%;*/
-    /*border: 1px solid #7f8c8d;*/
-    /*overflow: hidden;*/
-}
-
-#map_hover {
-    /*position: absolute;*/
-    /*left: 0;*/
-    /*top: 0;*/
-    /*width: 100%;*/
-}
-
-#map, #map_hover {
-    /*transition: 0.5s;*/
-}
-
 .moving {
     transition: none !important;
 }
@@ -31,4 +6,8 @@
     background: url(../img/ajax-loader.gif) no-repeat center;
     height: 200px;
     border: none !important;
+}
+
+.hidden {
+    /*display: none;*/
 }

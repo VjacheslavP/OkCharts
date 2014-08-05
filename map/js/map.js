@@ -29,7 +29,8 @@ var Map = function(settings) {
         },
         canvas_id: "map",
         canvas_hover_id: "map_hover",
-        container_id: "map_container"
+        container_id: "map_container",
+        translate_horizontal: false //use it only for Russia
     };
 
     this.updateSettings = function(settings) {
@@ -100,26 +101,17 @@ var Map = function(settings) {
         var e_keys = Object.keys(css);
         for (var i in e_keys) {
             var css_keys = Object.keys(css[e_keys[i]]);
-            for (var j in css_keys) {
+            for (var j in css_keys)
                 setCssStyle(self[e_keys[i]], css_keys[j], css[e_keys[i]][css_keys[j]]);
-            }
         }
-    }();
+    }(); //run function
 
 //private:
     function isset(variable) {
         return (typeof variable !== "undefined");
     }
 
-    function getGeometry(country) {
-        switch (self.geodata.type) {
-            case "FeatureCollection" : return country.geometry;
-            case "GeometryCollection" : return country;
-        }
-        console.error("unknown type of data (geometries)");
-    }
-
-    function getCoords(geometry) {
+    this.getCoords = function(geometry) {
         switch (geometry.type) {
             case 'Polygon' :
                 return geometry.coordinates;
@@ -136,7 +128,7 @@ var Map = function(settings) {
         }
         console.info("unknown type of geometry '"+geometry.type+"'");
         return [];
-    }
+    };
 
     function getColor(p) {
         var red, green, min = 0, max = 255 - min;
@@ -152,6 +144,22 @@ var Map = function(settings) {
     }
 
 //public:
+    this.translateX = function(x) {
+        return x - this.bbox[0] + this.bbox[2];
+    };
+
+    this.getX = function(x) {
+        return this.settings.translate_horizontal && x < 0 ? this.translateX(x) : x;
+    };
+
+    this.getGeometry = function(country) {
+        switch (this.geodata.type) {
+            case "FeatureCollection" : return country.geometry;
+            case "GeometryCollection" : return country;
+        }
+        console.error("unknown type of data (geometries)");
+    };
+
     this.getCanvasStyles = function() {
         return this.settings.canvas_styles;
     };
@@ -215,7 +223,7 @@ var Map = function(settings) {
             posy = (e.offsetY  - border_top),
             wk = cwidth / element.width,
             hk = cheight / element.height,
-            x = - ((cwidth - posx) / wk / this.scale) - this.bbox[0],
+            x = this.field.width - ((cwidth - posx) / wk / this.scale) + this.tx0,
             y = ((cheight - posy) / hk / this.scale) + this.bbox[1];
         return (map) ? {x: x, y: y} : {x: posx, y: posy};
     };
@@ -225,14 +233,18 @@ var Map = function(settings) {
         canvas.height = this.field.height * this.scale;
         ctx.fillStyle = this.getCanvasStyles().country.fill;
         ctx.strokeStyle = this.getCanvasStyles().country.stroke;
-        ctx.translate(-this.bbox[0] * this.scale, this.bbox[3] * this.scale);
+        var tx = -this.bbox[0],
+            ty = this.bbox[3];
+        if (this.settings.translate_horizontal)
+            tx = -this.tx0;
+        ctx.translate(tx * this.scale, ty * this.scale);
         ctx.scale(-1, 1);
         ctx.rotate(180 * Math.PI / 180);
     };
 
 //drawing methods
     this.clearCanvas = function(ctx) {
-        ctx.clearRect(this.bbox[0] * this.scale, this.bbox[1] * this.scale, this.canvas.width, this.canvas.height);
+        ctx.clearRect(this.tx0 * this.scale, this.bbox[1] * this.scale, this.canvas.width, this.canvas.height);
     };
 
     this.drawTooltip = function(ctx, text, point) {
@@ -264,7 +276,7 @@ var Map = function(settings) {
 
         y -= texth + padding * 2;
 
-        if (y - recth < this.bbox[1] * this.scale) {
+        if ((this.bbox[3] - point.y) * this.scale < recth) {
             y += recth;
             if (x - rectw > this.bbox[0] * this.scale)
                 x -= rectw;
@@ -301,10 +313,12 @@ var Map = function(settings) {
     this.drawCountry = function(country, ctx) {
         function drawPolygon(coords, ctx) {
             function getPoint(coords) {
-                var scale = self.scale;
+                var scale = self.scale,
+                    x = self.getX(coords[0]),
+                    y = coords[1];
                 return {
-                    x: coords[0] * scale,
-                    y: coords[1] * scale
+                    x: x * scale,
+                    y: y * scale
                 };
             }
             var point=getPoint(coords[0]);
@@ -318,7 +332,7 @@ var Map = function(settings) {
             ctx.stroke();
             ctx.fill();
         }
-        var coords = getCoords(getGeometry(country));
+        var coords = this.getCoords(this.getGeometry(country));
         for (var i in coords)
             drawPolygon(coords[i], ctx);
     };
@@ -416,14 +430,21 @@ var Map = function(settings) {
 
         var point = this.getMapPos(e),
             countries = this.getCountries(),
-            texts = [];
+            texts = [],
+            tooltip_point = point;
         this.clearCanvas(this.ctx_hover);
 
+        if (this.settings.translate_horizontal && point.x > this.bbox[2]) {
+            tooltip_point = JSON.parse(JSON.stringify(point));
+            point.x = -this.bbox[2] + point.x + this.bbox[0];
+        }
+
         for (var j in countries) {
-            var geometry = getGeometry(countries[j]),
-                poly = getCoords(geometry);
+            var geometry = this.getGeometry(countries[j]),
+                poly = this.getCoords(geometry);
             for (var i in poly) {
                 if (isPointInPoly(poly[i], point)) {
+                    console.log(j);
                     this.ctx_hover.fillStyle = this.getCanvasStyles().country_hover.fill;
                     this.drawCountry(countries[j], this.ctx_hover);
                     texts.push(this.getCountryName(countries[j]));
@@ -435,7 +456,7 @@ var Map = function(settings) {
             }
         }
 
-        this.drawTooltip(this.ctx_hover, texts, point);
+        this.drawTooltip(this.ctx_hover, texts, tooltip_point);
     };
 
     this.mouseMove = function(e){
@@ -482,6 +503,7 @@ var Map = function(settings) {
     };
 
     this.zoomHandler = function(e) {
+        e.preventDefault();
         var delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail))),
             zoom = (delta > 0) ? self.settings.zoom_step : 1 / self.settings.zoom_step;
         if (self.current_zoom * zoom < 1
@@ -489,8 +511,10 @@ var Map = function(settings) {
             || self.current_zoom == 1 && zoom < 0)
             return;
         var now = Date.now();
-        if (now - self.last_zoom <= 500)
+        if (now - self.last_zoom <= 500) {
+
             return;
+        }
         self.last_zoom = now;
         var point = self.getMapPos(e, true),
             focus = self.getMapPos(e, false);
@@ -511,13 +535,38 @@ var Map = function(settings) {
         self.drawAll();
     };
 
+    this.translateHorizontal = function() {
+        var countries = this.getCountries();
+        for (var i in countries) {
+            var geometry = this.getGeometry(countries[i]);
+            var coords = this.getCoords(geometry);
+            for (var j in coords)
+                for (var k in coords[j]) {
+                    var x = coords[j][k][0];
+                    if (x < 0)
+                        this.tx1 = Math.max(this.tx1, x - this.bbox[0] + this.bbox[2]);
+                    else
+                        this.tx0 = Math.min(this.tx0, x);
+                }
+        }
+        return {width: this.tx1 - this.tx0, height: this.bbox[3] - this.bbox[1]}
+    };
+
     this.initialize = function(data) {
         console.info(data);
         self.geodata = data;
         self.bbox = data.bbox;
+        if (self.settings.translate_horizontal) {
+            self.tx0 = self.bbox[2];
+            self.tx1 = 0;
+            self.field = self.translateHorizontal();
+        } else {
+            self.tx0 = self.bbox[0];
+            self.tx1 = self.bbox[2];
+            self.field.width = self.bbox[2] - self.bbox[0];
+            self.field.height = self.bbox[3] - self.bbox[1];
+        }
         this.scale *= window.devicePixelRatio;
-        self.field.width = (Math.abs(self.bbox[0]) + Math.abs(self.bbox[2]));
-        self.field.height = (Math.abs(self.bbox[1]) + Math.abs(self.bbox[3]));
         self.map_container.className = "";
         self.resizeHandler();
         self.canvas_hover.addEventListener("mousemove", self.mouseMove);
@@ -538,10 +587,12 @@ var Map = function(settings) {
 //end events
 
     this.loadData = function(file, afterLoaded) {
-        if (window.jQuery)
-            (jQuery).getJSON(file, function(data){
+        if (window.jQuery) {
+            (jQuery).ajaxSetup({async: false});
+            (jQuery).getJSON(file, function (data) {
                 self.dataLoaded(data, afterLoaded);
             });
+        }
         else if (typeof file == "object")
             self.dataLoaded(file, afterLoaded);
         else
@@ -573,4 +624,6 @@ var Map = function(settings) {
     this.loadData(this.settings.world_filename, function(){
         self.loadInfo(self.settings.example_filename);
     });
+
+
 };
